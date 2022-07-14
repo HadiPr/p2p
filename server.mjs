@@ -12,6 +12,7 @@ app.use((req, res, next) => (req.io = io && next()));
 io.on('connection', socket => {
   socket.on('offer', o => socket.broadcast.emit('offer', o));
   socket.on('answer', answer => socket.broadcast.emit('answer', answer));
+  socket.on('end', () => socket.broadcast.emit('end'));
 });
 app.use((req, res, next) => (req.io = io && next()));
 

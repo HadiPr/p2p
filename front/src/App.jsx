@@ -9,9 +9,10 @@ const servers = {
   ],
 };
 function App() {
-  const [offer, setOffer] = useState('');
-  const [answer, setAnswer] = useState('');
+  const [state, setState] = useState('NEUTRAL'); // NEUTRAL | CALLING | WAITIN_TO_ANSWER | CONNECTED
+  console.log('##', state);
   const peerConnection = useRef(new RTCPeerConnection(servers));
+  const offer = useRef();
   const localStream = useRef();
   const remoteStream = useRef();
   const userVideo = useRef();
@@ -39,89 +40,92 @@ function App() {
       pc.onicecandidate = async e => {
         if (e.candidate) {
           if (pc.localDescription.type === 'offer') {
-            setOffer(JSON.stringify(pc.localDescription));
             _io.current.emit('offer', pc.localDescription);
           }
           if (pc.localDescription.type === 'answer') {
-            setAnswer(JSON.stringify(pc.localDescription));
             _io.current.emit('answer', pc.localDescription);
+            setState('CONNECTED');
           }
         }
       };
     })();
     _io.current = io('http://localhost:8000', { transports: ['websocket'] });
     _io.current.connect();
-    _io.current.emit('message', 'hello');
-    _io.current.on('offer', offer => {
-      setOffer(JSON.stringify(offer));
-      pc.setRemoteDescription(offer);
+    _io.current.on('offer', _offer => {
+      setState('WAITIN_TO_ANSWER');
+      offer.current = _offer;
+      pc.setRemoteDescription(_offer);
     });
     _io.current.on('answer', answer => {
+      setState('CONNECTED');
       pc.setRemoteDescription(answer);
-      setAnswer(JSON.stringify(answer));
     });
+    _io.current.on('end', () => setState('ENDED'));
   }, []);
 
-  const handleCreateOffer = async function () {
+  const handleMakeCall = async function () {
+    setState('CALLING');
     const offer = await pc.createOffer();
     pc.setLocalDescription(offer);
   };
 
-  const handleCreateAnswer = async function () {
-    const _offer = JSON.parse(offer);
+  const handleAnswerCall = async function () {
+    const _offer = offer.current;
     await pc.setRemoteDescription(_offer);
     const answer = await pc.createAnswer(_offer);
     await pc.setLocalDescription(answer);
   };
 
-  const handleSetAnswer = function () {
-    pc.setRemoteDescription(JSON.parse(answer));
+  const handleClickButton = function () {
+    if (state === 'NEUTRAL') {
+      handleMakeCall();
+    }
+    if (state === 'WAITIN_TO_ANSWER') {
+      handleAnswerCall();
+    }
+    if (state === 'CONNECTED') {
+      setState('ENDED');
+      _io.current.emit('end');
+    }
+  };
+
+  const button = useMemo(
+    () =>
+      ({
+        NEUTRAL: { text: 'Make A Call', classes: 'bg-purple-600' },
+        CALLING: { text: 'Calling...', classes: 'bg-green-600' },
+        WAITIN_TO_ANSWER: { text: 'Answer Call', classes: 'bg-green-600' },
+        CONNECTED: { text: 'End', classes: 'bg-red-600' },
+      }[state]),
+    [state]
+  );
+
+  const renderConnection = () => {
+    if (state === 'ENDED') {
+      return <div className='text-center'>Call Ended!</div>;
+    }
+    return (
+      <>
+        <div className='flex flex-col sm:flex-row gap-2 justify-around bg-gray-200 items-center'>
+          <video autoPlay ref={userVideo} className='w-52' />
+          <video autoPlay ref={peerVideo} className='w-52' />
+        </div>
+        <div className='flex flex-col items-center gap-4 my-4'>
+          <button
+            onClick={handleClickButton}
+            disabled={state === 'CALLING'}
+            className={' rounded px-3 py-2 w-40 ' + button.classes}
+          >
+            {button.text}
+          </button>
+        </div>
+      </>
+    );
   };
 
   return (
-    <div className='mx-20 p-5  bg-gray-200'>
-      <div className='flex flex-col sm:flex-row gap-2 justify-around bg-gray 200'>
-        <video autoPlay ref={userVideo} className='w-52' />
-        <video autoPlay ref={peerVideo} className='w-52' />
-      </div>
-      <div>
-        <div className='flex items-center my-2 gap-10'>
-          <button
-            onClick={handleCreateOffer}
-            className='bg-purple-600 rounded px-3 py-2'
-          >
-            Create Offer
-          </button>
-          <h2 className='font-bold text-lg'>SDP Offer:</h2>
-        </div>
-        <textarea
-          onChange={e => setOffer(e.target.value)}
-          value={offer}
-          className='p-2 block w-full h-32'
-        ></textarea>
-      </div>
-      <div>
-        <div className='flex items-center my-2 gap-10'>
-          <button
-            onClick={handleCreateAnswer}
-            className='bg-purple-600 rounded px-3 py-2'
-          >
-            Create Answer
-          </button>{' '}
-          <h2 className='font-bold text-lg'>SDP Answer:</h2>
-        </div>
-        <textarea
-          value={answer}
-          onChange={e => setAnswer(e.target.value)}
-          className='p-2 block w-full h-32'
-        ></textarea>
-        <button
-          onClick={handleSetAnswer}
-          className='bg-purple-600 rounded px-3 py-2'
-        >
-          Create Answer
-        </button>{' '}
-      </div>
+    <div className='mx-5 sm:mx-10 md:mx-20  p-3  bg-gray-200'>
+      {renderConnection()}
     </div>
   );
 }
