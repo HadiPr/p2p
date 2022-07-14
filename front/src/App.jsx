@@ -59,7 +59,7 @@ function App() {
     await pc.setRemoteDescription(_offer);
     const answer = await pc.createAnswer(_offer);
     await pc.setLocalDescription(answer);
-    setAnswer(answer);
+    setAnswer(JSON.stringify(answer));
   };
 
   const handleSetAnswer = function () {
