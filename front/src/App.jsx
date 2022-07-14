@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.scss';
-
+import { io } from 'socket.io-client';
 const servers = {
   iceServers: [
     {
@@ -8,7 +8,6 @@ const servers = {
     },
   ],
 };
-
 function App() {
   const [offer, setOffer] = useState('');
   const [answer, setAnswer] = useState('');
@@ -18,7 +17,7 @@ function App() {
   const userVideo = useRef();
   const peerVideo = useRef();
   const pc = useMemo(() => peerConnection.current, [peerConnection.current]);
-
+  const _io = useRef();
   useEffect(() => {
     (async function () {
       //setup user video
@@ -39,19 +38,33 @@ function App() {
 
       pc.onicecandidate = async e => {
         if (e.candidate) {
-          pc.localDescription.type === 'offer' &&
+          if (pc.localDescription.type === 'offer') {
             setOffer(JSON.stringify(pc.localDescription));
-          pc.localDescription.type === 'answer' &&
+            _io.current.emit('offer', pc.localDescription);
+          }
+          if (pc.localDescription.type === 'answer') {
             setAnswer(JSON.stringify(pc.localDescription));
+            _io.current.emit('answer', pc.localDescription);
+          }
         }
       };
     })();
+    _io.current = io('http://localhost:8000', { transports: ['websocket'] });
+    _io.current.connect();
+    _io.current.emit('message', 'hello');
+    _io.current.on('offer', offer => {
+      setOffer(JSON.stringify(offer));
+      pc.setRemoteDescription(offer);
+    });
+    _io.current.on('answer', answer => {
+      pc.setRemoteDescription(answer);
+      setAnswer(JSON.stringify(answer));
+    });
   }, []);
 
   const handleCreateOffer = async function () {
     const offer = await pc.createOffer();
     pc.setLocalDescription(offer);
-    setOffer(JSON.stringify(offer));
   };
 
   const handleCreateAnswer = async function () {
@@ -59,7 +72,6 @@ function App() {
     await pc.setRemoteDescription(_offer);
     const answer = await pc.createAnswer(_offer);
     await pc.setLocalDescription(answer);
-    setAnswer(JSON.stringify(answer));
   };
 
   const handleSetAnswer = function () {
@@ -76,7 +88,8 @@ function App() {
         <div className='flex items-center my-2 gap-10'>
           <button
             onClick={handleCreateOffer}
-            className='bg-purple-600 rounded px-3 py-2'>
+            className='bg-purple-600 rounded px-3 py-2'
+          >
             Create Offer
           </button>
           <h2 className='font-bold text-lg'>SDP Offer:</h2>
@@ -84,13 +97,15 @@ function App() {
         <textarea
           onChange={e => setOffer(e.target.value)}
           value={offer}
-          className='p-2 block w-full h-32'></textarea>
+          className='p-2 block w-full h-32'
+        ></textarea>
       </div>
       <div>
         <div className='flex items-center my-2 gap-10'>
           <button
             onClick={handleCreateAnswer}
-            className='bg-purple-600 rounded px-3 py-2'>
+            className='bg-purple-600 rounded px-3 py-2'
+          >
             Create Answer
           </button>{' '}
           <h2 className='font-bold text-lg'>SDP Answer:</h2>
@@ -98,10 +113,12 @@ function App() {
         <textarea
           value={answer}
           onChange={e => setAnswer(e.target.value)}
-          className='p-2 block w-full h-32'></textarea>
+          className='p-2 block w-full h-32'
+        ></textarea>
         <button
           onClick={handleSetAnswer}
-          className='bg-purple-600 rounded px-3 py-2'>
+          className='bg-purple-600 rounded px-3 py-2'
+        >
           Create Answer
         </button>{' '}
       </div>
