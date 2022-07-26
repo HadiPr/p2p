@@ -49,7 +49,7 @@ function App() {
         }
       };
     })();
-    _io.current = io('http://localhost:8000', { transports: ['websocket'] });
+    _io.current = io('/', { transports: ['websocket'] });
     _io.current.connect();
     _io.current.on('offer', _offer => {
       setState('WAITIN_TO_ANSWER');
