@@ -3,12 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "p2p": "file:..",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "sass": "^1.53.0",
