@@ -9,8 +9,7 @@ const servers = {
   ],
 };
 function App() {
-  const [state, setState] = useState('NEUTRAL'); // NEUTRAL | CALLING | WAITIN_TO_ANSWER | CONNECTED
-  console.log('##', state);
+  const [state, setState] = useState('NEUTRAL'); // NEUTRAL | CALLING | WAITIN_TO_ANSWER | CONNECTED | ERROR
   const peerConnection = useRef(new RTCPeerConnection(servers));
   const offer = useRef();
   const localStream = useRef();
@@ -19,15 +18,21 @@ function App() {
   const peerVideo = useRef();
   const pc = useMemo(() => peerConnection.current, [peerConnection.current]);
   const _io = useRef();
+
   useEffect(() => {
     (async function () {
-      //setup user video
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      localStream.current = stream;
-      userVideo.current.srcObject = stream;
+      // setup user video
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        localStream.current = stream;
+        userVideo.current.srcObject = stream;
+      } catch (error) {
+        setState('ERROR');
+      }
+      // setup peer video
       remoteStream.current = new MediaStream();
       peerVideo.current.srcObject = remoteStream.current;
       localStream.current
@@ -49,8 +54,11 @@ function App() {
         }
       };
     })();
+
+    // connect and setup ws
     _io.current = io('/', { transports: ['websocket'] });
     _io.current.connect();
+
     _io.current.on('offer', _offer => {
       setState('WAITIN_TO_ANSWER');
       offer.current = _offer;
@@ -101,21 +109,31 @@ function App() {
   );
 
   const renderConnection = () => {
+    if (state === 'ERROR') {
+      return <div className='bg-red-600'>Unexpected Error Occured</div>;
+    }
     if (state === 'ENDED') {
       return <div className='text-center'>Call Ended!</div>;
     }
     return (
       <>
         <div className='flex flex-col sm:flex-row gap-2 justify-around bg-gray-200 items-center'>
-          <video autoPlay ref={userVideo} className='w-52' />
-          <video autoPlay ref={peerVideo} className='w-52' />
+          <video
+            autoPlay
+            ref={userVideo}
+            className='w-52 h-52 bg-gray-400 rounded-xl'
+          />
+          <video
+            autoPlay
+            ref={peerVideo}
+            className='w-52 h-52 bg-gray-400 rounded-xl'
+          />
         </div>
         <div className='flex flex-col items-center gap-4 my-4'>
           <button
             onClick={handleClickButton}
             disabled={state === 'CALLING'}
-            className={' rounded px-3 py-2 w-40 ' + button.classes}
-          >
+            className={' rounded px-3 py-2 w-40 ' + button.classes}>
             {button.text}
           </button>
         </div>
